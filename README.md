@@ -9,7 +9,7 @@ The system is deployed as a single, hardened, and highly-optimized container on 
 ## 🚀 Live Platform Link
 
 Explore the live, fully integrated system here:
-👉 **[EcoLoop Live Deployment](https://carbon-platform-988953139540.us-central1.run.app)**
+👉 **[EcoLoop Live Deployment](https://ecoloop-1044325459007.us-central1.run.app/)**
 
 *Deployed on Google Cloud Run with live Vertex AI Gemini coaching, Firebase Firestore snapshot history tracking, in-memory rate limiting, and an accessible glassmorphism user interface.*
 
