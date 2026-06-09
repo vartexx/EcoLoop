@@ -4,11 +4,11 @@ from __future__ import annotations
 
 
 def test_rate_limiter_blocks_calculation(client):
-    # The rate limit for calculations is 10 per minute.
-    # Send 10 calculations successfully:
+    # The rate limit for evaluations is 10 per minute.
+    # Send 10 evaluations successfully:
     for _ in range(10):
         resp = client.post(
-            "/api/calculate",
+            "/api/footprint/evaluate",
             json={
                 "transport": {"car_km_per_week": 10},
                 "diet": "vegan",
@@ -18,7 +18,7 @@ def test_rate_limiter_blocks_calculation(client):
 
     # The 11th request should be blocked (HTTP 429)
     blocked_resp = client.post(
-        "/api/calculate",
+        "/api/footprint/evaluate",
         json={
             "transport": {"car_km_per_week": 10},
             "diet": "vegan",
@@ -29,7 +29,7 @@ def test_rate_limiter_blocks_calculation(client):
     assert "Retry-After" in blocked_resp.headers
 
 
-def test_rate_limiter_blocks_entries(client):
+def test_rate_limiter_blocks_snapshots(client):
     calc = {
         "breakdown_kg": {"transport": 0.0, "home": 0.0, "diet": 900.0, "consumption": 0.0},
         "total_annual_kg": 900.0,
@@ -44,10 +44,10 @@ def test_rate_limiter_blocks_entries(client):
     device_id = "rate-limit-device-id"
 
     # Write rate limit is 5 requests per minute.
-    # Save 5 entries successfully:
+    # Save 5 snapshots successfully:
     for _ in range(5):
         resp = client.post(
-            "/api/entries",
+            "/api/history/snapshots",
             json={
                 "device_id": device_id,
                 "input": {"diet": "vegan"},
@@ -58,7 +58,7 @@ def test_rate_limiter_blocks_entries(client):
 
     # The 6th request should be blocked
     blocked_resp = client.post(
-        "/api/entries",
+        "/api/history/snapshots",
         json={
             "device_id": device_id,
             "input": {"diet": "vegan"},

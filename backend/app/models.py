@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from app.carbon.factors import CarFuel, DietType
+from app.engine.constants import CarFuel, DietType
 
-# Generous-but-finite upper bounds keep inputs sane without rejecting real users.
+# Bounded inputs to prevent division by zero or number overflows
 _MAX_KM_WEEK = 20_000.0
 _MAX_KWH_MONTH = 100_000.0
 _MAX_FLIGHTS = 200
@@ -39,7 +39,7 @@ class ConsumptionInput(BaseModel):
     waste_kg_per_week: float = Field(0, ge=0, le=_MAX_WASTE_WEEK)
 
 
-class CarbonInput(BaseModel):
+class FootprintProfile(BaseModel):
     """Full set of lifestyle inputs for a footprint estimate."""
 
     transport: TransportInput = Field(default_factory=TransportInput)
@@ -55,7 +55,7 @@ class Comparison(BaseModel):
     ratio_to_sustainable_target: float
 
 
-class FootprintResult(BaseModel):
+class AnalysisReport(BaseModel):
     """Per-category annual breakdown (kg CO2e) plus totals and context."""
 
     breakdown_kg: dict[str, float]
@@ -65,25 +65,25 @@ class FootprintResult(BaseModel):
 
 
 # ── Insights ──────────────────────────────────────────────────────────
-class Recommendation(BaseModel):
+class ActionTip(BaseModel):
     category: str
     action: str
     estimated_annual_savings_kg: float
 
 
-class InsightsResponse(BaseModel):
+class CoachFeedback(BaseModel):
     summary: str
-    recommendations: list[Recommendation]
+    recommendations: list[ActionTip]
     source: str  # "gemini" | "rules"
 
 
-# ── Entries (tracking history) ────────────────────────────────────────
-class EntryCreate(BaseModel):
+# ── Snapshots (tracking history) ────────────────────────────────────────
+class TimelineSnapshotCreate(BaseModel):
     device_id: str = Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
-    input: CarbonInput
-    result: FootprintResult
+    input: FootprintProfile
+    result: AnalysisReport
 
 
-class Entry(EntryCreate):
+class TimelineSnapshot(TimelineSnapshotCreate):
     id: str
     created_at: str  # ISO-8601 UTC

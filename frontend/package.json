@@ -12,8 +12,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "framer-motion": "^12.40.0",
+    "lucide-react": "^1.17.0",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "recharts": "^3.8.1",
+    "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "6.6.3",

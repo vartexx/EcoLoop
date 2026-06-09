@@ -10,16 +10,16 @@ from __future__ import annotations
 from functools import lru_cache
 
 from app.config import Settings, get_settings
-from app.repository.base import EntryRepository
+from app.storage.base_store import SnapshotStore
 
 
 @lru_cache
-def get_repository() -> EntryRepository:
+def get_repository() -> SnapshotStore:
     settings: Settings = get_settings()
     if settings.use_firestore:
-        from app.repository.firestore_repo import FirestoreEntryRepository
+        from app.storage.firestore_store import FirestoreSnapshotStore
 
-        return FirestoreEntryRepository(project_id=settings.project_id)
-    from app.repository.memory_repo import InMemoryEntryRepository
+        return FirestoreSnapshotStore(project_id=settings.project_id)
+    from app.storage.memory_store import InMemorySnapshotStore
 
-    return InMemoryEntryRepository()
+    return InMemorySnapshotStore()

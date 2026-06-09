@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from app.carbon import factors
-from app.carbon.calculator import calculate_footprint
-from app.insights.rules import generate_rule_based_insights
-from app.models import CarbonInput, TransportInput
+from app.coach.rules_advisor import generate_rule_based_insights
+from app.engine import constants
+from app.engine.calculator_service import calculate_footprint
+from app.models import FootprintProfile, TransportInput
 
 
-def _insights_for(data: CarbonInput):
+def _insights_for(data: FootprintProfile):
     return generate_rule_based_insights(data, calculate_footprint(data))
 
 
 def test_source_is_rules_and_has_summary():
-    data = CarbonInput()
+    data = FootprintProfile()
     resp = _insights_for(data)
     assert resp.source == "rules"
     assert resp.summary
@@ -22,25 +22,25 @@ def test_source_is_rules_and_has_summary():
 
 def test_recommendations_target_largest_category_first():
     # Heavy car use makes transport dominate; it should be addressed first.
-    data = CarbonInput(
-        transport=TransportInput(car_km_per_week=500, car_fuel=factors.CarFuel.PETROL),
-        diet=factors.DietType.VEGAN,
+    data = FootprintProfile(
+        transport=TransportInput(car_km_per_week=500, car_fuel=constants.CarFuel.PETROL),
+        diet=constants.DietType.VEGAN,
     )
     resp = _insights_for(data)
     assert resp.recommendations[0].category == "transport"
 
 
 def test_high_meat_diet_yields_diet_recommendation():
-    data = CarbonInput(diet=factors.DietType.HEAVY_MEAT)
+    data = FootprintProfile(diet=constants.DietType.HEAVY_MEAT)
     resp = _insights_for(data)
     categories = {r.category for r in resp.recommendations}
     assert "diet" in categories
 
 
 def test_savings_are_positive_and_finite():
-    data = CarbonInput(
+    data = FootprintProfile(
         transport=TransportInput(car_km_per_week=300, short_haul_flights_per_year=4),
-        diet=factors.DietType.HEAVY_MEAT,
+        diet=constants.DietType.HEAVY_MEAT,
     )
     resp = _insights_for(data)
     for rec in resp.recommendations:
@@ -49,7 +49,7 @@ def test_savings_are_positive_and_finite():
 
 
 def test_already_green_user_still_gets_constructive_summary():
-    data = CarbonInput(diet=factors.DietType.VEGAN)
+    data = FootprintProfile(diet=constants.DietType.VEGAN)
     resp = _insights_for(data)
     # Even a low footprint should produce a non-empty, encouraging response.
     assert resp.summary

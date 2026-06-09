@@ -1,10 +1,10 @@
 // Typed client for the backend API. Same-origin in production; proxied in dev.
 
 import type {
-  CarbonInput,
-  Entry,
-  FootprintResult,
-  InsightsResponse,
+  FootprintProfile,
+  TimelineSnapshot,
+  AnalysisReport,
+  CoachFeedback,
 } from "./types";
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
@@ -19,30 +19,30 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function calculate(input: CarbonInput): Promise<FootprintResult> {
-  return postJson<FootprintResult>("/api/calculate", input);
+export function evaluateProfile(input: FootprintProfile): Promise<AnalysisReport> {
+  return postJson<AnalysisReport>("/api/footprint/evaluate", input);
 }
 
-export function getInsights(input: CarbonInput): Promise<InsightsResponse> {
-  return postJson<InsightsResponse>("/api/insights", input);
+export function fetchCoachFeedback(input: FootprintProfile): Promise<CoachFeedback> {
+  return postJson<CoachFeedback>("/api/coach/advise", input);
 }
 
-export function saveEntry(
+export function uploadSnapshot(
   deviceId: string,
-  input: CarbonInput,
-  result: FootprintResult,
-): Promise<Entry> {
-  return postJson<Entry>("/api/entries", {
+  input: FootprintProfile,
+  result: AnalysisReport,
+): Promise<TimelineSnapshot> {
+  return postJson<TimelineSnapshot>("/api/history/snapshots", {
     device_id: deviceId,
     input,
     result,
   });
 }
 
-export async function listEntries(deviceId: string): Promise<Entry[]> {
-  const res = await fetch(`/api/entries/${encodeURIComponent(deviceId)}`);
+export async function loadSnapshots(deviceId: string): Promise<TimelineSnapshot[]> {
+  const res = await fetch(`/api/history/snapshots/${encodeURIComponent(deviceId)}`);
   if (!res.ok) {
     throw new Error(`Failed to load history (${res.status})`);
   }
-  return (await res.json()) as Entry[];
+  return (await res.json()) as TimelineSnapshot[];
 }

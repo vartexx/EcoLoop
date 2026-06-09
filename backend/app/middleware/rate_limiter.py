@@ -42,7 +42,7 @@ class SimpleRateLimiterMiddleware(BaseHTTPMiddleware):
             now = time.time()
 
             # Limit calculator and insights generation requests
-            if path in ("/api/calculate", "/api/insights"):
+            if path in ("/api/footprint/evaluate", "/api/coach/advise"):
                 with self._lock:
                     # Filter out older timestamps outside the rate limit window
                     self._calc_history[client_ip] = [
@@ -58,7 +58,7 @@ class SimpleRateLimiterMiddleware(BaseHTTPMiddleware):
                     self._calc_history[client_ip].append(now)
 
             # Limit snapshot entries saving and listing
-            elif path.startswith("/api/entries"):
+            elif path.startswith("/api/history/snapshots"):
                 with self._lock:
                     # Filter out older timestamps
                     self._write_history[client_ip] = [

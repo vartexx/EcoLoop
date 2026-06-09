@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import app.insights.gemini as gemini
-from app.carbon.calculator import calculate_footprint
+import app.coach.gemini_advisor as gemini
 from app.config import Settings
-from app.models import CarbonInput, InsightsResponse, Recommendation
+from app.engine.calculator_service import calculate_footprint
+from app.models import ActionTip, CoachFeedback, FootprintProfile
 
 
 def _ctx():
-    data = CarbonInput()
+    data = FootprintProfile()
     return data, calculate_footprint(data)
 
 
@@ -31,10 +31,10 @@ def test_gemini_failure_falls_back_to_rules(monkeypatch):
 
 
 def test_gemini_success_path(monkeypatch):
-    canned = InsightsResponse(
+    canned = CoachFeedback(
         summary="Great progress!",
         recommendations=[
-            Recommendation(category="diet", action="Eat more plants", estimated_annual_savings_kg=200.0)
+            ActionTip(category="diet", action="Eat more plants", estimated_annual_savings_kg=200.0)
         ],
         source="gemini",
     )

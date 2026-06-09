@@ -15,9 +15,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
+from app.api import analytics_api, snapshots_api, status_api
 from app.config import get_settings
 from app.middleware.rate_limiter import SimpleRateLimiterMiddleware
-from app.routes import calculate, entries, health
 
 # Directory holding the built frontend (populated by the Docker build).
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -71,9 +71,9 @@ def create_app() -> FastAPI:
         return response
 
     # API routes.
-    app.include_router(health.router)
-    app.include_router(calculate.router)
-    app.include_router(entries.router)
+    app.include_router(status_api.router)
+    app.include_router(analytics_api.router)
+    app.include_router(snapshots_api.router)
 
     _mount_spa(app)
     return app

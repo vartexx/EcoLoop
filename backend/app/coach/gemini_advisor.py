@@ -16,17 +16,17 @@ from __future__ import annotations
 import json
 import logging
 
+from app.coach.rules_advisor import generate_rule_based_insights
 from app.config import Settings
-from app.insights.rules import generate_rule_based_insights
-from app.models import CarbonInput, FootprintResult, InsightsResponse, Recommendation
+from app.models import ActionTip, AnalysisReport, CoachFeedback, FootprintProfile
 
 logger = logging.getLogger(__name__)
 
 _SYSTEM_INSTRUCTION = (
-    "You are a concise, encouraging sustainability coach. Given a person's annual "
-    "carbon footprint breakdown (kg CO2e), produce a short summary and 2-4 specific, "
-    "realistic actions that target their largest emission sources. Each action must "
-    "include an estimated annual saving in kg CO2e. Be practical and non-judgmental."
+    "You are an encouraging green living mentor. Based on a user's yearly greenhouse "
+    "gas footprint (in kg CO2e), write a brief summary and suggest 2 to 4 actionable, "
+    "practical steps to decrease emissions in their highest sectors. Provide an "
+    "estimated annual saving in kg CO2e for every step. Keep it constructive, helpful, and positive."
 )
 
 # Schema for Gemini structured (JSON) output.
@@ -51,18 +51,18 @@ _RESPONSE_SCHEMA = {
 }
 
 
-def _build_prompt(data: CarbonInput, result: FootprintResult) -> str:
+def _build_prompt(data: FootprintProfile, result: AnalysisReport) -> str:
     return (
-        "Carbon footprint breakdown (kg CO2e per year):\n"
+        "Yearly carbon footprint profile (kg CO2e):\n"
         f"{json.dumps(result.breakdown_kg)}\n"
-        f"Total: {result.total_annual_kg} kg/yr ({result.total_annual_tonnes} t/yr).\n"
-        f"Sustainable target: {result.comparison.sustainable_target_annual_kg} kg/yr.\n"
-        f"Diet: {data.diet.value}. Car fuel: {data.transport.car_fuel.value}.\n"
-        "Give tailored advice to reduce the largest sources."
+        f"Sum: {result.total_annual_kg} kg/yr ({result.total_annual_tonnes} tonnes/yr).\n"
+        f"Sustainable standard: {result.comparison.sustainable_target_annual_kg} kg/yr.\n"
+        f"Diet: {data.diet.value}. Vehicle fuel: {data.transport.car_fuel.value}.\n"
+        "Provide specific coaching tips targeting the highest contributors."
     )
 
 
-def _call_gemini(data: CarbonInput, result: FootprintResult, settings: Settings) -> InsightsResponse:
+def _call_gemini(data: FootprintProfile, result: AnalysisReport, settings: Settings) -> CoachFeedback:
     """Invoke Gemini on Vertex AI and parse a structured response.
 
     Imported lazily so the SDK/credentials are only required when actually used —
@@ -82,15 +82,12 @@ def _call_gemini(data: CarbonInput, result: FootprintResult, settings: Settings)
             response_mime_type="application/json",
             response_schema=_RESPONSE_SCHEMA,
             temperature=0.4,
-            # Gemini 2.5 models "think" before answering, and thinking tokens
-            # share this budget. Keep it generous so reasoning plus the final
-            # structured JSON always fit and the response is never truncated.
             max_output_tokens=4096,
         ),
     )
     payload = json.loads(response.text)
     recommendations = [
-        Recommendation(
+        ActionTip(
             category=str(r["category"]),
             action=str(r["action"]),
             estimated_annual_savings_kg=round(float(r["estimated_annual_savings_kg"]), 2),
@@ -99,7 +96,7 @@ def _call_gemini(data: CarbonInput, result: FootprintResult, settings: Settings)
     ]
     if not recommendations:
         raise ValueError("Gemini returned no recommendations")
-    return InsightsResponse(
+    return CoachFeedback(
         summary=str(payload["summary"]),
         recommendations=recommendations[:4],
         source="gemini",
@@ -107,8 +104,8 @@ def _call_gemini(data: CarbonInput, result: FootprintResult, settings: Settings)
 
 
 def generate_insights(
-    data: CarbonInput, result: FootprintResult, settings: Settings
-) -> InsightsResponse:
+    data: FootprintProfile, result: AnalysisReport, settings: Settings
+) -> CoachFeedback:
     """Return personalized insights, preferring Gemini and falling back to rules."""
     if not settings.use_gemini:
         return generate_rule_based_insights(data, result)

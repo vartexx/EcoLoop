@@ -1,94 +1,378 @@
-import { useCallback, useEffect, useState } from "react";
-import { CalculatorForm } from "./components/CalculatorForm";
-import { ResultBreakdown } from "./components/ResultBreakdown";
-import { InsightsPanel } from "./components/InsightsPanel";
-import { HistoryPanel } from "./components/HistoryPanel";
+import { useState, useEffect, useCallback } from "react";
+import Navbar from "./components/layout/Navbar";
+import FootprintWizard from "./components/calculator/FootprintWizard";
+import VisualSummary from "./components/dashboard/VisualSummary";
+import HabitTracker from "./components/tracker/HabitTracker";
+import AICoach from "./components/coach/AICoach";
+import { CarbonCalculatorInputs, calculateCarbonFootprint, CarbonFootprintResult } from "./utils/carbonCalculator";
+import { HABIT_PRESETS, Habit } from "./utils/habitPresets";
+import { Sparkles, LayoutDashboard, Globe, Zap, Cloud, RefreshCw, CheckCircle2 } from "lucide-react";
 import * as api from "./lib/api";
-import { getDeviceId } from "./lib/deviceId";
-import type { CarbonInput, Entry, FootprintResult, InsightsResponse } from "./lib/types";
+import { getDeviceId } from "./lib/identity";
+import type { TimelineSnapshot, CoachFeedback } from "./lib/types";
 
 export default function App() {
   const [deviceId] = useState(getDeviceId);
-  const [result, setResult] = useState<FootprintResult | null>(null);
-  const [lastInput, setLastInput] = useState<CarbonInput | null>(null);
-  const [insights, setInsights] = useState<InsightsResponse | null>(null);
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [inputs, setInputs] = useState<CarbonCalculatorInputs | null>(null);
+  const [points, setPoints] = useState<number>(0);
+  const [habits, setHabits] = useState<Habit[]>(HABIT_PRESETS);
+  const [darkMode, setDarkMode] = useState<boolean>(false);
+  const [isMounted, setIsMounted] = useState<boolean>(false);
+  const [showWizard, setShowWizard] = useState<boolean>(false);
 
-  const loadHistory = useCallback(async () => {
+  // Cloud Sync State
+  const [cloudSnapshots, setCloudSnapshots] = useState<TimelineSnapshot[]>([]);
+  const [coachFeedback, setCoachFeedback] = useState<CoachFeedback | null>(null);
+  const [syncing, setSyncing] = useState<boolean>(false);
+  const [syncSuccess, setSyncSuccess] = useState<boolean>(false);
+
+  // Translate original client inputs to backend profile structure
+  const translateToBackendProfile = (data: CarbonCalculatorInputs) => {
+    return {
+      transport: {
+        car_km_per_week: Math.round((data.petrolCarKm + data.electricCarKm) / 52),
+        car_fuel: data.electricCarKm > data.petrolCarKm ? ("electric" as const) : ("petrol" as const),
+        public_transit_km_per_week: Math.round(data.publicTransitKm / 52),
+        short_haul_flights_per_year: data.shortFlights,
+        long_haul_flights_per_year: data.longFlights,
+      },
+      home: {
+        electricity_kwh_per_month: data.electricityKwh,
+        natural_gas_kwh_per_month: data.heatingSource === "gas" ? data.heatingKwh : 0,
+        household_size: 1, // standard personal share
+      },
+      diet: data.dietType === "meat-heavy"
+        ? ("heavy_meat" as const)
+        : data.dietType === "vegetarian"
+        ? ("vegetarian" as const)
+        : data.dietType === "vegan"
+        ? ("vegan" as const)
+        : ("medium_meat" as const),
+      consumption: {
+        goods_spend_usd_per_month: 200, // typical consumption baseline
+        waste_kg_per_week: data.recycles ? 5 : 12,
+      },
+    };
+  };
+
+  // Sync snapshot to cloud database (Firestore)
+  const syncToCloud = useCallback(async (currentInputs: CarbonCalculatorInputs) => {
+    setSyncing(true);
+    setSyncSuccess(false);
     try {
-      setEntries(await api.listEntries(deviceId));
-    } catch {
-      // History is non-critical; fail silently rather than blocking the app.
+      const profile = translateToBackendProfile(currentInputs);
+      
+      // 1. Evaluate report on the backend
+      const report = await api.evaluateProfile(profile);
+      
+      // 2. Upload snapshot
+      await api.uploadSnapshot(deviceId, profile, report);
+      
+      // 3. Request advisor coaching recommendations
+      const feedback = await api.fetchCoachFeedback(profile);
+      setCoachFeedback(feedback);
+      localStorage.setItem("ecoloop_coach_feedback", JSON.stringify(feedback));
+
+      // 4. Reload snapshots list
+      const snapshots = await api.loadSnapshots(deviceId);
+      setCloudSnapshots(snapshots);
+
+      setSyncSuccess(true);
+      setTimeout(() => setSyncSuccess(false), 3000);
+    } catch (err) {
+      console.error("Cloud synchronization failed:", err);
+    } finally {
+      setSyncing(false);
     }
   }, [deviceId]);
 
+  // Load state from local storage on mount
   useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
+    setIsMounted(true);
+    
+    const storedInputs = localStorage.getItem("ecoloop_inputs");
+    const storedPoints = localStorage.getItem("ecoloop_points");
+    const storedHabits = localStorage.getItem("ecoloop_habits");
+    const storedDarkMode = localStorage.getItem("ecoloop_darkmode");
+    const storedFeedback = localStorage.getItem("ecoloop_coach_feedback");
 
-  const handleCalculate = async (input: CarbonInput) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [calc, ins] = await Promise.all([api.calculate(input), api.getInsights(input)]);
-      setResult(calc);
-      setInsights(ins);
-      setLastInput(input);
-    } catch {
-      setError("Something went wrong calculating your footprint. Please try again.");
-    } finally {
-      setLoading(false);
+    if (storedInputs) {
+      const parsedInputs = JSON.parse(storedInputs);
+      setInputs(parsedInputs);
+      // Fetch cloud snapshots in the background
+      void api.loadSnapshots(deviceId).then(setCloudSnapshots).catch(() => {});
     }
+    if (storedPoints) {
+      setPoints(Number(storedPoints));
+    }
+    if (storedHabits) {
+      setHabits(JSON.parse(storedHabits));
+    }
+    if (storedFeedback) {
+      setCoachFeedback(JSON.parse(storedFeedback));
+    }
+    if (storedDarkMode === "true") {
+      setDarkMode(true);
+      document.documentElement.classList.add("dark");
+    } else {
+      setDarkMode(false);
+      document.documentElement.classList.remove("dark");
+    }
+  }, [deviceId]);
+
+  const handleWizardComplete = (wizardData: CarbonCalculatorInputs) => {
+    setInputs(wizardData);
+    localStorage.setItem("ecoloop_inputs", JSON.stringify(wizardData));
+    setShowWizard(false);
+    
+    // Sync calculations and trigger coaching queries immediately
+    void syncToCloud(wizardData);
   };
 
-  const handleSave = async () => {
-    if (!result || !lastInput) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await api.saveEntry(deviceId, lastInput, result);
-      await loadHistory();
-    } catch {
-      setError("Could not save this entry. Please try again.");
-    } finally {
-      setSaving(false);
-    }
+  const handleToggleHabit = (habitId: string) => {
+    const updatedHabits = habits.map(h => {
+      if (h.id === habitId) {
+        const nextCompleted = !h.completed;
+        const pointsDiff = nextCompleted ? h.points : -h.points;
+        const nextPoints = Math.max(0, points + pointsDiff);
+        setPoints(nextPoints);
+        localStorage.setItem("ecoloop_points", String(nextPoints));
+        return { ...h, completed: nextCompleted };
+      }
+      return h;
+    });
+
+    setHabits(updatedHabits);
+    localStorage.setItem("ecoloop_habits", JSON.stringify(updatedHabits));
   };
+
+  const handleReset = () => {
+    localStorage.removeItem("ecoloop_inputs");
+    localStorage.removeItem("ecoloop_points");
+    localStorage.removeItem("ecoloop_habits");
+    localStorage.removeItem("ecoloop_coach_feedback");
+    setInputs(null);
+    setPoints(0);
+    setCoachFeedback(null);
+    setCloudSnapshots([]);
+    setHabits(HABIT_PRESETS.map(h => ({ ...h, completed: false })));
+    setShowWizard(false);
+  };
+
+  const handleThemeChange = (val: boolean) => {
+    setDarkMode(val);
+    localStorage.setItem("ecoloop_darkmode", String(val));
+  };
+
+  // Calculations
+  const baseResult: CarbonFootprintResult | null = inputs ? calculateCarbonFootprint(inputs) : null;
+  const dailySavings = habits.filter(h => h.completed).reduce((sum, h) => sum + h.offset, 0);
+
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <>
       <a className="skip-link" href="#main">
         Skip to main content
       </a>
-      <header className="app-header">
-        <h1>Carbon Footprint Awareness Platform</h1>
-        <p>Understand, track, and reduce your carbon footprint.</p>
-      </header>
 
-      <main id="main">
-        <CalculatorForm onSubmit={handleCalculate} loading={loading} />
+      <div className="min-h-screen flex flex-col pb-16 space-y-6 bg-background text-foreground">
+        {/* Sticky Top Navigation */}
+        <Navbar 
+          points={points} 
+          onReset={handleReset} 
+          darkMode={darkMode} 
+          setDarkMode={handleThemeChange} 
+          hasProfile={inputs !== null}
+        />
 
-        <div role="alert" aria-live="assertive">
-          {error && <p className="error">{error}</p>}
-        </div>
+        <main id="main" className="flex-1 w-full max-w-7xl mx-auto px-4 md:px-6">
+          {inputs === null ? (
+            // Landing View & Wizard flow
+            <div className="py-12 flex flex-col items-center">
+              {!showWizard ? (
+                <div className="text-center max-w-3xl space-y-8 animate-slide-in">
+                  {/* Hero Title */}
+                  <div className="space-y-4">
+                    <span className="inline-flex items-center text-xs font-bold text-primary px-3.5 py-1.5 rounded-full border border-primary/25 bg-primary/10">
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" /> 2026 Climate Hackathon Challenge
+                    </span>
+                    <h1 className="text-4xl md:text-6xl font-black tracking-tight text-foreground leading-tight">
+                      Understand & Shrink Your{" "}
+                      <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                        Carbon Footprint
+                      </span>
+                    </h1>
+                    <p className="text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+                      EcoLoop leverages smart calculator metrics, gamified micro-challenges, and a personalized AI Sustainability Coach to make carbon reduction transparent, achievable, and rewarding.
+                    </p>
+                  </div>
 
-        {result && (
-          <>
-            <ResultBreakdown result={result} />
-            {insights && <InsightsPanel insights={insights} />}
-            <div className="card">
-              <button className="btn secondary" onClick={handleSave} disabled={saving}>
-                {saving ? "Saving…" : "Save this entry to my history"}
-              </button>
+                  {/* Main CTA */}
+                  <div>
+                    <button
+                      onClick={() => setShowWizard(true)}
+                      className="px-8 py-4 bg-gradient-to-r from-primary to-secondary text-white font-extrabold text-sm rounded-2xl shadow-xl hover:shadow-primary/20 hover:scale-105 transition-all duration-200 cursor-pointer"
+                    >
+                      Start Carbon Questionnaire
+                    </button>
+                  </div>
+
+                  {/* Feature Highlights Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-12">
+                    <div className="glass p-6 rounded-3xl border border-white/20 text-left space-y-3.5 shadow-md">
+                      <div className="p-3 bg-primary/15 rounded-2xl w-fit text-primary border border-primary/25">
+                        <LayoutDashboard className="h-6 w-6" />
+                      </div>
+                      <h2 className="text-sm font-bold text-foreground">Interactive Averages Breakdown</h2>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Visualize your annual footprint across Transport, Energy, Diet, and Waste using modern, interactive Recharts comparisons.
+                      </p>
+                    </div>
+
+                    <div className="glass p-6 rounded-3xl border border-white/20 text-left space-y-3.5 shadow-md">
+                      <div className="p-3 bg-blue-500/15 rounded-2xl w-fit text-blue-500 border border-blue-500/25">
+                        <Globe className="h-6 w-6" />
+                      </div>
+                      <h2 className="text-sm font-bold text-foreground">Gamified Action Offset Tracker</h2>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Check off daily green habits to earn XP, level up, unlock achievement badges, and watch your carbon score adjust in real-time.
+                      </p>
+                    </div>
+
+                    <div className="glass p-6 rounded-3xl border border-white/20 text-left space-y-3.5 shadow-md">
+                      <div className="p-3 bg-amber-500/15 rounded-2xl w-fit text-amber-500 border border-amber-500/25">
+                        <Zap className="h-6 w-6" />
+                      </div>
+                      <h2 className="text-sm font-bold text-foreground">Contextual AI Coach Insights</h2>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Interact with your embedded coach chatbot, pre-loaded with your profile metrics, to receive tailored green hacks and advice.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full animate-slide-in">
+                  <h1 className="sr-only">EcoLoop Carbon Questionnaire</h1>
+                  <FootprintWizard onComplete={handleWizardComplete} />
+                </div>
+              )}
             </div>
-          </>
-        )}
+          ) : (
+            // Dashboard & Tracking View
+            <div className="space-y-8 animate-slide-in">
+              <h1 className="sr-only">EcoLoop Carbon Dashboard</h1>
+              
+              {/* Cloud Synchronization Panel */}
+              <div className="glass rounded-3xl p-4 border border-white/20 shadow-md flex items-center justify-between">
+                <div className="flex items-center space-x-2.5">
+                  <div className={`p-2 rounded-xl border ${syncSuccess ? "bg-green-500/10 border-green-500/20 text-green-500" : "bg-primary/10 border-primary/20 text-primary"}`}>
+                    <Cloud className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-foreground">Cloud Sync Context</h4>
+                    <p className="text-[10px] text-muted-foreground">
+                      {cloudSnapshots.length > 0 
+                        ? `Stored ${cloudSnapshots.length} anonymous carbon snapshots in Firestore` 
+                        : "Footprints calculations mapped locally"}
+                    </p>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => inputs && syncToCloud(inputs)}
+                  disabled={syncing}
+                  className="px-4 py-2 border border-border bg-card rounded-xl text-xs font-semibold text-foreground hover:bg-accent flex items-center space-x-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  {syncing ? (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      <span>Syncing...</span>
+                    </>
+                  ) : syncSuccess ? (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                      <span className="text-green-500">Synced!</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      <span>Sync to Cloud</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
-        <HistoryPanel entries={entries} />
-      </main>
+              {/* Dashboard Visualizations */}
+              {baseResult && (
+                <VisualSummary 
+                  baseFootprint={baseResult} 
+                  dailySavings={dailySavings} 
+                />
+              )}
+
+              {/* Split Habit Tracker & AI Coach Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                <HabitTracker 
+                  habits={habits} 
+                  onToggleHabit={handleToggleHabit} 
+                  points={points} 
+                />
+                
+                <AICoach inputs={inputs} feedback={coachFeedback} />
+              </div>
+
+              {/* Historical Cloud Snapshots Table */}
+              {cloudSnapshots.length > 0 && (
+                <section className="glass rounded-3xl p-6 border border-white/20 shadow-xl space-y-4">
+                  <div>
+                    <h2 className="text-md font-bold text-foreground">Cloud Snapshot History</h2>
+                    <p className="text-xs text-muted-foreground">Your anonymous footprint snapshots synchronized on Google Cloud Firestore.</p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="history w-full border-collapse">
+                      <thead>
+                        <tr>
+                          <th className="text-left text-xs font-semibold text-muted-foreground border-b border-border pb-2">Snapshot Date</th>
+                          <th className="text-left text-xs font-semibold text-muted-foreground border-b border-border pb-2">Diet</th>
+                          <th className="text-left text-xs font-semibold text-muted-foreground border-b border-border pb-2">Commute (Weekly)</th>
+                          <th className="text-right text-xs font-semibold text-muted-foreground border-b border-border pb-2">Emissions (t CO₂e/yr)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cloudSnapshots.map((snapshot) => (
+                          <tr key={snapshot.id}>
+                            <td className="text-xs text-foreground py-2.5 border-b border-border/50">
+                              {new Date(snapshot.created_at).toLocaleDateString(undefined, {
+                                year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+                              })}
+                            </td>
+                            <td className="text-xs text-foreground py-2.5 border-b border-border/50 capitalize">
+                              {snapshot.input.diet.replace("_", " ")}
+                            </td>
+                            <td className="text-xs text-foreground py-2.5 border-b border-border/50">
+                              {snapshot.input.transport.car_km_per_week} km ({snapshot.input.transport.car_fuel})
+                            </td>
+                            <td className="text-xs text-foreground py-2.5 border-b border-border/50 text-right font-bold">
+                              {snapshot.result.total_annual_tonnes.toFixed(3)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
+            </div>
+          )}
+        </main>
+      </div>
     </>
   );
 }

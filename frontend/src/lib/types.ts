@@ -10,7 +10,7 @@ export type DietType =
   | "vegetarian"
   | "vegan";
 
-export interface CarbonInput {
+export interface FootprintProfile {
   transport: {
     car_km_per_week: number;
     car_fuel: CarFuel;
@@ -37,34 +37,34 @@ export interface Comparison {
   ratio_to_sustainable_target: number;
 }
 
-export interface FootprintResult {
+export interface AnalysisReport {
   breakdown_kg: Record<string, number>;
   total_annual_kg: number;
   total_annual_tonnes: number;
   comparison: Comparison;
 }
 
-export interface Recommendation {
+export interface ActionTip {
   category: string;
   action: string;
   estimated_annual_savings_kg: number;
 }
 
-export interface InsightsResponse {
+export interface CoachFeedback {
   summary: string;
-  recommendations: Recommendation[];
+  recommendations: ActionTip[];
   source: "gemini" | "rules";
 }
 
-export interface Entry {
+export interface TimelineSnapshot {
   id: string;
   created_at: string;
   device_id: string;
-  input: CarbonInput;
-  result: FootprintResult;
+  input: FootprintProfile;
+  result: AnalysisReport;
 }
 
-export const emptyInput = (): CarbonInput => ({
+export const emptyProfile = (): FootprintProfile => ({
   transport: {
     car_km_per_week: 0,
     car_fuel: "petrol",

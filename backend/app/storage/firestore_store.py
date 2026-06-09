@@ -1,6 +1,6 @@
-"""Firestore-backed EntryRepository (Google Cloud Native mode).
+"""Firestore-backed SnapshotStore (Google Cloud Native mode).
 
-Entries are stored anonymously under ``devices/{device_id}/entries/{id}`` —
+Snapshots are stored anonymously under ``devices/{device_id}/snapshots/{id}`` —
 keyed by a client-generated random device id, so no personal account or login is
 required. Authentication is via Application Default Credentials (the Cloud Run
 service account), so there is no credential file in the codebase.
@@ -14,19 +14,21 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from app.models import CarbonInput, Entry, FootprintResult
+from app.models import AnalysisReport, FootprintProfile, TimelineSnapshot
 
 _COLLECTION = "devices"
-_SUBCOLLECTION = "entries"
+_SUBCOLLECTION = "snapshots"
 
 
-class FirestoreEntryRepository:
+class FirestoreSnapshotStore:
     def __init__(self, project_id: str) -> None:
         from google.cloud import firestore  # lazy import
 
         self._db = firestore.Client(project=project_id)
 
-    def add(self, device_id: str, data: CarbonInput, result: FootprintResult) -> Entry:
+    def add(
+        self, device_id: str, data: FootprintProfile, result: AnalysisReport
+    ) -> TimelineSnapshot:
         entry_id = uuid.uuid4().hex
         created_at = datetime.now(timezone.utc).isoformat()
         doc = (
@@ -42,7 +44,7 @@ class FirestoreEntryRepository:
                 "result": result.model_dump(mode="json"),
             }
         )
-        return Entry(
+        return TimelineSnapshot(
             id=entry_id,
             created_at=created_at,
             device_id=device_id,
@@ -50,7 +52,7 @@ class FirestoreEntryRepository:
             result=result,
         )
 
-    def list_for_device(self, device_id: str, limit: int = 50) -> list[Entry]:
+    def list_for_device(self, device_id: str, limit: int = 50) -> list[TimelineSnapshot]:
         from google.cloud import firestore  # lazy import
 
         snapshots = (
@@ -61,16 +63,16 @@ class FirestoreEntryRepository:
             .limit(limit)
             .stream()
         )
-        entries: list[Entry] = []
+        entries: list[TimelineSnapshot] = []
         for snap in snapshots:
             raw = snap.to_dict()
             entries.append(
-                Entry(
+                TimelineSnapshot(
                     id=snap.id,
                     created_at=raw["created_at"],
                     device_id=device_id,
-                    input=CarbonInput.model_validate(raw["input"]),
-                    result=FootprintResult.model_validate(raw["result"]),
+                    input=FootprintProfile.model_validate(raw["input"]),
+                    result=AnalysisReport.model_validate(raw["result"]),
                 )
             )
         return entries

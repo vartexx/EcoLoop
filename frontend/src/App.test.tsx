@@ -1,21 +1,21 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
 import App from "./App";
-import type { FootprintResult, InsightsResponse } from "./lib/types";
+import type { AnalysisReport, CoachFeedback } from "./lib/types";
 
 // Mock the API layer so the integration test runs without a backend.
 vi.mock("./lib/api", () => ({
-  calculate: vi.fn(),
-  getInsights: vi.fn(),
-  saveEntry: vi.fn(),
-  listEntries: vi.fn(),
+  evaluateProfile: vi.fn(),
+  fetchCoachFeedback: vi.fn(),
+  uploadSnapshot: vi.fn(),
+  loadSnapshots: vi.fn(),
 }));
 
 import * as api from "./lib/api";
 
-const result: FootprintResult = {
+const result: AnalysisReport = {
   breakdown_kg: { transport: 2000, home: 1000, diet: 1500, consumption: 500 },
   total_annual_kg: 5000,
   total_annual_tonnes: 5.0,
@@ -27,7 +27,7 @@ const result: FootprintResult = {
   },
 };
 
-const insights: InsightsResponse = {
+const insights: CoachFeedback = {
   summary: "Your footprint is above the sustainable target.",
   recommendations: [
     { category: "transport", action: "Drive less", estimated_annual_savings_kg: 400 },
@@ -37,11 +37,11 @@ const insights: InsightsResponse = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(api.listEntries).mockResolvedValue([]);
-  vi.mocked(api.calculate).mockResolvedValue(result);
-  vi.mocked(api.getInsights).mockResolvedValue(insights);
-  vi.mocked(api.saveEntry).mockResolvedValue({
-    id: "e1",
+  vi.mocked(api.loadSnapshots).mockResolvedValue([]);
+  vi.mocked(api.evaluateProfile).mockResolvedValue(result);
+  vi.mocked(api.fetchCoachFeedback).mockResolvedValue(insights);
+  vi.mocked(api.uploadSnapshot).mockResolvedValue({
+    id: "snapshot1",
     created_at: new Date().toISOString(),
     device_id: "dev-123",
     input: {} as never,
@@ -49,37 +49,48 @@ beforeEach(() => {
   });
 });
 
+// Mock Recharts responsive container to render in jsdom
+vi.mock("recharts", async () => {
+  const original = await vi.importActual<any>("recharts");
+  return {
+    ...original,
+    ResponsiveContainer: ({ children }: any) => <div>{children}</div>,
+  };
+});
+
 describe("App", () => {
-  it("renders with no accessibility violations", async () => {
+  it("renders with no accessibility violations on landing", async () => {
     const { container } = render(<App />);
     expect(await axe(container)).toHaveNoViolations();
   });
 
-  it("calculates and shows results plus personalized insights", async () => {
+  it("navigates to the questionnaire when CTA is clicked", async () => {
     render(<App />);
-    await userEvent.click(screen.getByRole("button", { name: /calculate my footprint/i }));
+    const cta = screen.getByRole("button", { name: /start carbon questionnaire/i });
+    expect(cta).toBeInTheDocument();
 
-    await waitFor(() => expect(screen.getByText(/your estimated footprint/i)).toBeInTheDocument());
-    expect(screen.getByText(/personalized insights/i)).toBeInTheDocument();
-    expect(screen.getByText(/drive less/i)).toBeInTheDocument();
-    expect(api.calculate).toHaveBeenCalledTimes(1);
+    await userEvent.click(cta);
+    expect(screen.getByText(/discover your annual carbon footprint/i)).toBeInTheDocument();
   });
 
-  it("saves an entry and reloads history", async () => {
+  it("can reset profile state", async () => {
+    // Put dummy inputs in localStorage to simulate completed state
+    localStorage.setItem("ecoloop_inputs", JSON.stringify({ petrolCarKm: 100 }));
+    
     render(<App />);
-    await userEvent.click(screen.getByRole("button", { name: /calculate my footprint/i }));
-    await waitFor(() => screen.getByRole("button", { name: /save this entry/i }));
-    await userEvent.click(screen.getByRole("button", { name: /save this entry/i }));
+    
+    // Reset button should be visible in Navbar
+    const resetBtn = screen.getByTitle(/reset profile/i);
+    expect(resetBtn).toBeInTheDocument();
 
-    await waitFor(() => expect(api.saveEntry).toHaveBeenCalledTimes(1));
-    // listEntries: once on mount, once after save.
-    expect(api.listEntries).toHaveBeenCalledTimes(2);
-  });
+    // Stub window.confirm to return true
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValueOnce(true);
 
-  it("shows an error message when calculation fails", async () => {
-    vi.mocked(api.calculate).mockRejectedValueOnce(new Error("boom"));
-    render(<App />);
-    await userEvent.click(screen.getByRole("button", { name: /calculate my footprint/i }));
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/something went wrong/i));
+    await userEvent.click(resetBtn);
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(screen.getByText(/start carbon questionnaire/i)).toBeInTheDocument();
+    
+    confirmSpy.mockRestore();
+    localStorage.clear();
   });
 });
