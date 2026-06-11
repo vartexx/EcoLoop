@@ -25,6 +25,8 @@ from enum import Enum
 
 
 class CarFuel(str, Enum):
+    """Fuel types for personal vehicles."""
+
     PETROL = "petrol"
     DIESEL = "diesel"
     HYBRID = "hybrid"
@@ -53,6 +55,7 @@ LONG_HAUL_TRIP_KM: float = 6500.0
 # ──────────────────────────── Home energy ───────────────────────────
 # kg CO2e per kWh of grid electricity (global-ish average; grids vary widely).
 # Source: IEA / Our World in Data ~2022 world average.
+# Source: IEA / Our World in Data ~2022 world average.
 ELECTRICITY_PER_KWH: float = 0.450
 # kg CO2e per kWh of natural gas (heating). Source: DEFRA 2023.
 NATURAL_GAS_PER_KWH: float = 0.183
@@ -63,6 +66,8 @@ NATURAL_GAS_PER_KWH: float = 0.183
 
 
 class DietType(str, Enum):
+    """Diet types and eating styles."""
+
     HEAVY_MEAT = "heavy_meat"
     MEDIUM_MEAT = "medium_meat"
     LOW_MEAT = "low_meat"

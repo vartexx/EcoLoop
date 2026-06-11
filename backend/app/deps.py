@@ -15,6 +15,7 @@ from app.storage.base_store import SnapshotStore
 
 @lru_cache
 def get_repository() -> SnapshotStore:
+    """Get the configured snapshot repository."""
     settings: Settings = get_settings()
     if settings.use_firestore:
         from app.storage.firestore_store import FirestoreSnapshotStore

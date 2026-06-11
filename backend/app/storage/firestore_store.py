@@ -21,7 +21,10 @@ _SUBCOLLECTION = "snapshots"
 
 
 class FirestoreSnapshotStore:
+    """A SnapshotStore backed by Google Cloud Firestore database."""
+
     def __init__(self, project_id: str) -> None:
+        """Initialize the Firestore Snapshot Store with a project ID."""
         from google.cloud import firestore  # lazy import
 
         self._db = firestore.Client(project=project_id)
@@ -29,6 +32,7 @@ class FirestoreSnapshotStore:
     def add(
         self, device_id: str, data: FootprintProfile, result: AnalysisReport
     ) -> TimelineSnapshot:
+        """Add a new footprint snapshot for a device to Firestore."""
         entry_id = uuid.uuid4().hex
         created_at = datetime.now(timezone.utc).isoformat()
         doc = (
@@ -53,6 +57,7 @@ class FirestoreSnapshotStore:
         )
 
     def list_for_device(self, device_id: str, limit: int = 50) -> list[TimelineSnapshot]:
+        """List historical footprint snapshots for a device from Firestore."""
         from google.cloud import firestore  # lazy import
 
         snapshots = (

@@ -10,13 +10,21 @@ All quantities are normalised to **annual kg CO2e** before being summed.
 from __future__ import annotations
 
 from app.engine import constants
-from app.models import AnalysisReport, Comparison, FootprintProfile
+from app.models import (
+    AnalysisReport,
+    Comparison,
+    ConsumptionInput,
+    FootprintProfile,
+    HomeInput,
+    TransportInput,
+)
 
 _WEEKS_PER_YEAR = 52
 _MONTHS_PER_YEAR = 12
 
 
-def _transport_annual_kg(t) -> float:
+def _transport_annual_kg(t: TransportInput) -> float:
+    """Compute annual transport emissions in kg CO2e."""
     car = t.car_km_per_week * _WEEKS_PER_YEAR * constants.CAR_FACTORS_PER_KM[t.car_fuel]
     transit = t.public_transit_km_per_week * _WEEKS_PER_YEAR * constants.PUBLIC_TRANSIT_PER_KM
     flights = (
@@ -26,14 +34,16 @@ def _transport_annual_kg(t) -> float:
     return car + transit + flights
 
 
-def _home_annual_kg(h) -> float:
+def _home_annual_kg(h: HomeInput) -> float:
+    """Compute annual home utility emissions in kg CO2e."""
     electricity = h.electricity_kwh_per_month * _MONTHS_PER_YEAR * constants.ELECTRICITY_PER_KWH
     gas = h.natural_gas_kwh_per_month * _MONTHS_PER_YEAR * constants.NATURAL_GAS_PER_KWH
     # Household energy is shared, so attribute a per-person share.
     return (electricity + gas) / h.household_size
 
 
-def _consumption_annual_kg(c) -> float:
+def _consumption_annual_kg(c: ConsumptionInput) -> float:
+    """Compute annual consumption and waste emissions in kg CO2e."""
     goods = c.goods_spend_usd_per_month * _MONTHS_PER_YEAR * constants.GOODS_PER_USD_MONTHLY
     waste = c.waste_kg_per_week * _WEEKS_PER_YEAR * constants.WASTE_PER_KG
     return goods + waste

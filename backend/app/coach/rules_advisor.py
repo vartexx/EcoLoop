@@ -34,7 +34,7 @@ def _transport_recommendation(data: FootprintProfile, amount: float) -> ActionTi
     car_km_year = t.car_km_per_week * 52
     car_emissions = car_km_year * constants.CAR_FACTORS_PER_KM[t.car_fuel]
     flying = t.short_haul_flights_per_year + t.long_haul_flights_per_year > 0
-    
+
     # Address whichever sub-source is larger: flying or driving.
     if flying and flights_km * constants.FLIGHT_LONG_HAUL_PER_KM > car_emissions:
         return ActionTip(

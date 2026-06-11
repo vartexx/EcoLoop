@@ -1,116 +1,37 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "./components/layout/Navbar";
 import FootprintWizard from "./components/calculator/FootprintWizard";
 import VisualSummary from "./components/dashboard/VisualSummary";
 import HabitTracker from "./components/tracker/HabitTracker";
 import AICoach from "./components/coach/AICoach";
-import { CarbonCalculatorInputs, calculateCarbonFootprint, CarbonFootprintResult } from "./utils/carbonCalculator";
-import { HABIT_PRESETS, Habit } from "./utils/habitPresets";
+import { calculateCarbonFootprint, CarbonFootprintResult } from "./utils/carbonCalculator";
 import { Sparkles, LayoutDashboard, Globe, Zap, Cloud, RefreshCw, CheckCircle2 } from "lucide-react";
-import * as api from "./lib/api";
-import { getDeviceId } from "./lib/identity";
-import type { TimelineSnapshot, CoachFeedback } from "./lib/types";
+import { useFootprint } from "./hooks/useFootprint";
 
 export default function App() {
-  const [deviceId] = useState(getDeviceId);
-  const [inputs, setInputs] = useState<CarbonCalculatorInputs | null>(null);
-  const [points, setPoints] = useState<number>(0);
-  const [habits, setHabits] = useState<Habit[]>(HABIT_PRESETS);
+  const {
+    inputs,
+    points,
+    habits,
+    cloudSnapshots,
+    coachFeedback,
+    syncing,
+    syncSuccess,
+    announcement,
+    syncToCloud,
+    handleWizardComplete,
+    handleToggleHabit,
+    handleReset,
+  } = useFootprint();
+
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [isMounted, setIsMounted] = useState<boolean>(false);
   const [showWizard, setShowWizard] = useState<boolean>(false);
 
-  // Cloud Sync State
-  const [cloudSnapshots, setCloudSnapshots] = useState<TimelineSnapshot[]>([]);
-  const [coachFeedback, setCoachFeedback] = useState<CoachFeedback | null>(null);
-  const [syncing, setSyncing] = useState<boolean>(false);
-  const [syncSuccess, setSyncSuccess] = useState<boolean>(false);
-
-  // Translate original client inputs to backend profile structure
-  const translateToBackendProfile = (data: CarbonCalculatorInputs) => {
-    return {
-      transport: {
-        car_km_per_week: Math.round((data.petrolCarKm + data.electricCarKm) / 52),
-        car_fuel: data.electricCarKm > data.petrolCarKm ? ("electric" as const) : ("petrol" as const),
-        public_transit_km_per_week: Math.round(data.publicTransitKm / 52),
-        short_haul_flights_per_year: data.shortFlights,
-        long_haul_flights_per_year: data.longFlights,
-      },
-      home: {
-        electricity_kwh_per_month: data.electricityKwh,
-        natural_gas_kwh_per_month: data.heatingSource === "gas" ? data.heatingKwh : 0,
-        household_size: 1, // standard personal share
-      },
-      diet: data.dietType === "meat-heavy"
-        ? ("heavy_meat" as const)
-        : data.dietType === "vegetarian"
-        ? ("vegetarian" as const)
-        : data.dietType === "vegan"
-        ? ("vegan" as const)
-        : ("medium_meat" as const),
-      consumption: {
-        goods_spend_usd_per_month: 200, // typical consumption baseline
-        waste_kg_per_week: data.recycles ? 5 : 12,
-      },
-    };
-  };
-
-  // Sync snapshot to cloud database (Firestore)
-  const syncToCloud = useCallback(async (currentInputs: CarbonCalculatorInputs) => {
-    setSyncing(true);
-    setSyncSuccess(false);
-    try {
-      const profile = translateToBackendProfile(currentInputs);
-      
-      // 1. Evaluate report on the backend
-      const report = await api.evaluateProfile(profile);
-      
-      // 2. Upload snapshot
-      await api.uploadSnapshot(deviceId, profile, report);
-      
-      // 3. Request advisor coaching recommendations
-      const feedback = await api.fetchCoachFeedback(profile);
-      setCoachFeedback(feedback);
-      localStorage.setItem("ecoloop_coach_feedback", JSON.stringify(feedback));
-
-      // 4. Reload snapshots list
-      const snapshots = await api.loadSnapshots(deviceId);
-      setCloudSnapshots(snapshots);
-
-      setSyncSuccess(true);
-      setTimeout(() => setSyncSuccess(false), 3000);
-    } catch (err) {
-      console.error("Cloud synchronization failed:", err);
-    } finally {
-      setSyncing(false);
-    }
-  }, [deviceId]);
-
-  // Load state from local storage on mount
+  // Load theme state from local storage on mount
   useEffect(() => {
     setIsMounted(true);
-    
-    const storedInputs = localStorage.getItem("ecoloop_inputs");
-    const storedPoints = localStorage.getItem("ecoloop_points");
-    const storedHabits = localStorage.getItem("ecoloop_habits");
     const storedDarkMode = localStorage.getItem("ecoloop_darkmode");
-    const storedFeedback = localStorage.getItem("ecoloop_coach_feedback");
-
-    if (storedInputs) {
-      const parsedInputs = JSON.parse(storedInputs);
-      setInputs(parsedInputs);
-      // Fetch cloud snapshots in the background
-      void api.loadSnapshots(deviceId).then(setCloudSnapshots).catch(() => {});
-    }
-    if (storedPoints) {
-      setPoints(Number(storedPoints));
-    }
-    if (storedHabits) {
-      setHabits(JSON.parse(storedHabits));
-    }
-    if (storedFeedback) {
-      setCoachFeedback(JSON.parse(storedFeedback));
-    }
     if (storedDarkMode === "true") {
       setDarkMode(true);
       document.documentElement.classList.add("dark");
@@ -118,50 +39,21 @@ export default function App() {
       setDarkMode(false);
       document.documentElement.classList.remove("dark");
     }
-  }, [deviceId]);
-
-  const handleWizardComplete = (wizardData: CarbonCalculatorInputs) => {
-    setInputs(wizardData);
-    localStorage.setItem("ecoloop_inputs", JSON.stringify(wizardData));
-    setShowWizard(false);
-    
-    // Sync calculations and trigger coaching queries immediately
-    void syncToCloud(wizardData);
-  };
-
-  const handleToggleHabit = (habitId: string) => {
-    const updatedHabits = habits.map(h => {
-      if (h.id === habitId) {
-        const nextCompleted = !h.completed;
-        const pointsDiff = nextCompleted ? h.points : -h.points;
-        const nextPoints = Math.max(0, points + pointsDiff);
-        setPoints(nextPoints);
-        localStorage.setItem("ecoloop_points", String(nextPoints));
-        return { ...h, completed: nextCompleted };
-      }
-      return h;
-    });
-
-    setHabits(updatedHabits);
-    localStorage.setItem("ecoloop_habits", JSON.stringify(updatedHabits));
-  };
-
-  const handleReset = () => {
-    localStorage.removeItem("ecoloop_inputs");
-    localStorage.removeItem("ecoloop_points");
-    localStorage.removeItem("ecoloop_habits");
-    localStorage.removeItem("ecoloop_coach_feedback");
-    setInputs(null);
-    setPoints(0);
-    setCoachFeedback(null);
-    setCloudSnapshots([]);
-    setHabits(HABIT_PRESETS.map(h => ({ ...h, completed: false })));
-    setShowWizard(false);
-  };
+  }, []);
 
   const handleThemeChange = (val: boolean) => {
     setDarkMode(val);
     localStorage.setItem("ecoloop_darkmode", String(val));
+    if (val) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  };
+
+  const onWizardComplete = (wizardData: any) => {
+    void handleWizardComplete(wizardData);
+    setShowWizard(false);
   };
 
   // Calculations
@@ -181,6 +73,11 @@ export default function App() {
       <a className="skip-link" href="#main">
         Skip to main content
       </a>
+
+      {/* Visually hidden live region for screen-reader announcements */}
+      <div className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </div>
 
       <div className="min-h-screen flex flex-col pb-16 space-y-6 bg-background text-foreground">
         {/* Sticky Top Navigation */}
@@ -260,7 +157,7 @@ export default function App() {
               ) : (
                 <div className="w-full animate-slide-in">
                   <h1 className="sr-only">EcoLoop Carbon Questionnaire</h1>
-                  <FootprintWizard onComplete={handleWizardComplete} />
+                  <FootprintWizard onComplete={onWizardComplete} />
                 </div>
               )}
             </div>

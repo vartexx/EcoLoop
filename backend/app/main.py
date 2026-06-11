@@ -7,9 +7,11 @@ whole platform runs as a single Cloud Run container.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Coroutine
 from pathlib import Path
+from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -38,6 +40,7 @@ _SECURITY_HEADERS = {
 
 
 def create_app() -> FastAPI:
+    """Create and configure the FastAPI application instances."""
     settings = get_settings()
     app = FastAPI(
         title="Carbon Footprint Awareness Platform",
@@ -57,17 +60,21 @@ def create_app() -> FastAPI:
     app.add_middleware(SimpleRateLimiterMiddleware)
 
     @app.middleware("http")
-    async def security_headers(request: Request, call_next):
+    async def security_headers(
+        request: Request,
+        call_next: Callable[[Request], Coroutine[Any, Any, Response]],
+    ) -> Response:
+        """Apply security response headers and disable API caching."""
         response = await call_next(request)
         for key, value in _SECURITY_HEADERS.items():
             response.headers.setdefault(key, value)
-        
+
         # Disable caching for all API endpoints to protect sensitive inputs/history
         if request.url.path.startswith("/api/") and not request.url.path.endswith("/health"):
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
-            
+
         return response
 
     # API routes.
@@ -90,8 +97,9 @@ def _mount_spa(app: FastAPI) -> None:
 
     index = _STATIC_DIR / "index.html"
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def spa(full_path: str):  # noqa: ANN202
+    @app.get("/{full_path:path}", include_in_schema=False, response_model=None)
+    async def spa(full_path: str) -> FileResponse | JSONResponse:
+        """Wildcard fallback handler for production client-side routing."""
         # API 404s should stay JSON, not fall through to index.html.
         if full_path.startswith("api/"):
             return JSONResponse({"detail": "Not Found"}, status_code=404)

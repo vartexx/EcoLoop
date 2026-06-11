@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Car, Plane, Train, Zap, Flame, 
-  Apple, Trash2, ArrowRight, ArrowLeft, CheckCircle, AlertCircle, Leaf
+  Apple, Trash2, ArrowRight, ArrowLeft, CheckCircle, Leaf
 } from 'lucide-react';
 import { CarbonCalculatorInputs, DEFAULT_INPUTS } from '../../utils/carbonCalculator';
+import { NumberField } from './NumberField';
 
 interface CarbonWizardProps {
   onComplete: (inputs: CarbonCalculatorInputs) => void;
@@ -182,33 +183,23 @@ export default function CarbonWizard({ onComplete }: CarbonWizardProps) {
                   <Car className="h-4 w-4" /> <span>Road Mileage (km per year)</span>
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-foreground mb-1">Petrol/Diesel Car</label>
-                    <input 
-                      type="number"
-                      min="0"
-                      value={formData.petrolCarKm}
-                      onChange={e => handleInputChange('petrolCarKm', e.target.value)}
-                      className={`w-full px-4 py-2.5 rounded-xl border bg-input text-foreground focus:ring-2 focus:ring-primary focus:outline-none transition ${
-                        errors.petrolCarKm ? 'border-red-500 ring-1 ring-red-500' : 'border-border'
-                      }`}
-                    />
-                    {errors.petrolCarKm && <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="h-3.5 w-3.5 mr-1" />{errors.petrolCarKm}</p>}
-                  </div>
+                  <NumberField
+                    id="petrolCarKm"
+                    label="Petrol/Diesel Car"
+                    value={formData.petrolCarKm}
+                    onChange={val => handleInputChange('petrolCarKm', String(val))}
+                    error={errors.petrolCarKm}
+                    min={0}
+                  />
 
-                  <div>
-                    <label className="block text-xs font-medium text-foreground mb-1">Electric Vehicle (EV)</label>
-                    <input 
-                      type="number"
-                      min="0"
-                      value={formData.electricCarKm}
-                      onChange={e => handleInputChange('electricCarKm', e.target.value)}
-                      className={`w-full px-4 py-2.5 rounded-xl border bg-input text-foreground focus:ring-2 focus:ring-primary focus:outline-none transition ${
-                        errors.electricCarKm ? 'border-red-500 ring-1 ring-red-500' : 'border-border'
-                      }`}
-                    />
-                    {errors.electricCarKm && <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="h-3.5 w-3.5 mr-1" />{errors.electricCarKm}</p>}
-                  </div>
+                  <NumberField
+                    id="electricCarKm"
+                    label="Electric Vehicle (EV)"
+                    value={formData.electricCarKm}
+                    onChange={val => handleInputChange('electricCarKm', String(val))}
+                    error={errors.electricCarKm}
+                    min={0}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
@@ -216,17 +207,14 @@ export default function CarbonWizard({ onComplete }: CarbonWizardProps) {
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-primary border-b border-primary/10 pb-1 mb-3 flex items-center space-x-1">
                       <Train className="h-4 w-4" /> <span>Public Transit</span>
                     </h3>
-                    <label className="block text-xs font-medium text-foreground mb-1">Bus/Train (km per year)</label>
-                    <input 
-                      type="number"
-                      min="0"
+                    <NumberField
+                      id="publicTransitKm"
+                      label="Bus/Train (km per year)"
                       value={formData.publicTransitKm}
-                      onChange={e => handleInputChange('publicTransitKm', e.target.value)}
-                      className={`w-full px-4 py-2.5 rounded-xl border bg-input text-foreground focus:ring-2 focus:ring-primary focus:outline-none transition ${
-                        errors.publicTransitKm ? 'border-red-500 ring-1 ring-red-500' : 'border-border'
-                      }`}
+                      onChange={val => handleInputChange('publicTransitKm', String(val))}
+                      error={errors.publicTransitKm}
+                      min={0}
                     />
-                    {errors.publicTransitKm && <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="h-3.5 w-3.5 mr-1" />{errors.publicTransitKm}</p>}
                   </div>
 
                   <div>
@@ -234,34 +222,21 @@ export default function CarbonWizard({ onComplete }: CarbonWizardProps) {
                       <Plane className="h-4 w-4" /> <span>Aviation (flights per year)</span>
                     </h3>
                     <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[10px] font-medium text-foreground mb-1">Short (&lt; 3 hrs)</label>
-                        <input 
-                          type="number"
-                          min="0"
-                          value={formData.shortFlights}
-                          onChange={e => handleInputChange('shortFlights', e.target.value)}
-                          className={`w-full px-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-primary focus:outline-none transition ${
-                            errors.shortFlights ? 'border-red-500 ring-1 ring-red-500' : 'border-border'
-                          }`}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-medium text-foreground mb-1">Long (&gt; 3 hrs)</label>
-                        <input 
-                          type="number"
-                          min="0"
-                          value={formData.longFlights}
-                          onChange={e => handleInputChange('longFlights', e.target.value)}
-                          className={`w-full px-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-primary focus:outline-none transition ${
-                            errors.longFlights ? 'border-red-500 ring-1 ring-red-500' : 'border-border'
-                          }`}
-                        />
-                      </div>
+                      <NumberField
+                        id="shortFlights"
+                        label="Short (< 3 hrs)"
+                        value={formData.shortFlights}
+                        onChange={val => handleInputChange('shortFlights', String(val))}
+                        min={0}
+                      />
+                      <NumberField
+                        id="longFlights"
+                        label="Long (> 3 hrs)"
+                        value={formData.longFlights}
+                        onChange={val => handleInputChange('longFlights', String(val))}
+                        min={0}
+                      />
                     </div>
-                    {(errors.shortFlights || errors.longFlights) && (
-                      <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="h-3.5 w-3.5 mr-1" />Flight counts invalid</p>
-                    )}
                   </div>
                 </div>
               </div>
@@ -274,18 +249,15 @@ export default function CarbonWizard({ onComplete }: CarbonWizardProps) {
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-primary border-b border-primary/10 pb-1 mb-3 flex items-center space-x-1">
                       <Zap className="h-4 w-4" /> <span>Electricity</span>
                     </h3>
-                    <label className="block text-xs font-medium text-foreground mb-1">Average Monthly Usage (kWh)</label>
-                    <input 
-                      type="number"
-                      min="0"
+                    <NumberField
+                      id="electricityKwh"
+                      label="Average Monthly Usage (kWh)"
                       value={formData.electricityKwh}
-                      onChange={e => handleInputChange('electricityKwh', e.target.value)}
-                      className={`w-full px-4 py-2.5 rounded-xl border bg-input text-foreground focus:ring-2 focus:ring-primary focus:outline-none transition ${
-                        errors.electricityKwh ? 'border-red-500 ring-1 ring-red-500' : 'border-border'
-                      }`}
+                      onChange={val => handleInputChange('electricityKwh', String(val))}
+                      error={errors.electricityKwh}
+                      min={0}
                     />
                     <p className="text-[10px] text-muted-foreground mt-1">Typical home is ~300-500 kWh/month.</p>
-                    {errors.electricityKwh && <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="h-3.5 w-3.5 mr-1" />{errors.electricityKwh}</p>}
 
                     <div className="mt-4 flex items-center">
                       <input 
@@ -303,11 +275,12 @@ export default function CarbonWizard({ onComplete }: CarbonWizardProps) {
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-primary border-b border-primary/10 pb-1 mb-3 flex items-center space-x-1">
                       <Flame className="h-4 w-4" /> <span>Home Heating</span>
                     </h3>
-                    <label className="block text-xs font-medium text-foreground mb-1">Heating Source</label>
+                    <label htmlFor="heatingSource" className="block text-xs font-medium text-foreground mb-1">Heating Source</label>
                     <select
+                      id="heatingSource"
                       value={formData.heatingSource}
                       onChange={e => handleInputChange('heatingSource', e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-border bg-input text-foreground focus:ring-2 focus:ring-primary focus:outline-none transition mb-3"
+                      className="w-full px-4 py-2.5 rounded-2xl border border-white/10 bg-white/5 text-foreground text-xs focus:ring-2 focus:ring-primary/20 focus:border-primary/45 focus:outline-none transition mb-3"
                     >
                       <option value="gas">Natural Gas</option>
                       <option value="oil">Heating Oil</option>
@@ -317,21 +290,14 @@ export default function CarbonWizard({ onComplete }: CarbonWizardProps) {
                     </select>
 
                     {formData.heatingSource !== 'none' && (
-                      <div>
-                        <label className="block text-xs font-medium text-foreground mb-1">
-                          {formData.heatingSource === 'oil' ? 'Monthly Oil usage (Litres)' : 'Average Monthly heating (kWh)'}
-                        </label>
-                        <input 
-                          type="number"
-                          min="0"
-                          value={formData.heatingKwh}
-                          onChange={e => handleInputChange('heatingKwh', e.target.value)}
-                          className={`w-full px-4 py-2.5 rounded-xl border bg-input text-foreground focus:ring-2 focus:ring-primary focus:outline-none transition ${
-                            errors.heatingKwh ? 'border-red-500 ring-1 ring-red-500' : 'border-border'
-                          }`}
-                        />
-                        {errors.heatingKwh && <p className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="h-3.5 w-3.5 mr-1" />{errors.heatingKwh}</p>}
-                      </div>
+                      <NumberField
+                        id="heatingKwh"
+                        label={formData.heatingSource === 'oil' ? 'Monthly Oil usage (Litres)' : 'Average Monthly heating (kWh)'}
+                        value={formData.heatingKwh}
+                        onChange={val => handleInputChange('heatingKwh', String(val))}
+                        error={errors.heatingKwh}
+                        min={0}
+                      />
                     )}
                   </div>
                 </div>

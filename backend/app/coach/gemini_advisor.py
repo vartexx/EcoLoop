@@ -111,6 +111,6 @@ def generate_insights(
         return generate_rule_based_insights(data, result)
     try:
         return _call_gemini(data, result, settings)
-    except Exception as exc:  # noqa: BLE001 — any failure must degrade gracefully
+    except Exception as exc:
         logger.warning("Gemini insight generation failed, using rule-based fallback: %s", exc)
         return generate_rule_based_insights(data, result)

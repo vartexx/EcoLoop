@@ -43,3 +43,49 @@ def test_gemini_success_path(monkeypatch):
     resp = gemini.generate_insights(data, result, Settings(use_gemini=True))
     assert resp.source == "gemini"
     assert resp.summary == "Great progress!"
+
+
+def test_call_gemini_success():
+    from unittest.mock import MagicMock, patch
+
+    from app.coach.gemini_advisor import _call_gemini
+
+    data, result = _ctx()
+    settings = Settings(use_gemini=True, project_id="mock-project", region="us-central1")
+
+    with patch("google.genai.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.text = '{"summary": "You are doing well!", "recommendations": [{"category": "diet", "action": "Eat vegan", "estimated_annual_savings_kg": 500.0}]}'
+        mock_client.models.generate_content.return_value = mock_response
+
+        resp = _call_gemini(data, result, settings)
+
+        assert resp.source == "gemini"
+        assert resp.summary == "You are doing well!"
+        assert len(resp.recommendations) == 1
+        assert resp.recommendations[0].category == "diet"
+        assert resp.recommendations[0].estimated_annual_savings_kg == 500.0
+
+
+def test_call_gemini_empty_recommendations():
+    from unittest.mock import MagicMock, patch
+
+    from app.coach.gemini_advisor import _call_gemini
+
+    data, result = _ctx()
+    settings = Settings(use_gemini=True, project_id="mock-project", region="us-central1")
+
+    with patch("google.genai.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.text = '{"summary": "No advice", "recommendations": []}'
+        mock_client.models.generate_content.return_value = mock_response
+
+        import pytest
+        with pytest.raises(ValueError, match="Gemini returned no recommendations"):
+            _call_gemini(data, result, settings)

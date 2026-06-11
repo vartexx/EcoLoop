@@ -5,7 +5,7 @@ from __future__ import annotations
 from app.coach.rules_advisor import generate_rule_based_insights
 from app.engine import constants
 from app.engine.calculator_service import calculate_footprint
-from app.models import FootprintProfile, TransportInput
+from app.models import ConsumptionInput, FootprintProfile, HomeInput, TransportInput
 
 
 def _insights_for(data: FootprintProfile):
@@ -54,3 +54,53 @@ def test_already_green_user_still_gets_constructive_summary():
     # Even a low footprint should produce a non-empty, encouraging response.
     assert resp.summary
     assert isinstance(resp.recommendations, list)
+
+
+def test_flying_dominates_transport():
+    data = FootprintProfile(
+        transport=TransportInput(
+            car_km_per_week=1,
+            car_fuel=constants.CarFuel.PETROL,
+            short_haul_flights_per_year=10,
+        )
+    )
+    resp = _insights_for(data)
+    rec = next(r for r in resp.recommendations if r.category == "transport")
+    assert "Reduce air travel" in rec.action
+
+
+def test_transport_no_car_but_has_emissions():
+    data = FootprintProfile(
+        transport=TransportInput(
+            car_km_per_week=0,
+            public_transit_km_per_week=1000,
+        )
+    )
+    resp = _insights_for(data)
+    rec = next(r for r in resp.recommendations if r.category == "transport")
+    assert "Share rides" in rec.action
+
+
+def test_zero_amount_recommendations():
+    from app.coach.rules_advisor import _consumption_recommendation, _home_recommendation
+    assert _home_recommendation(0) is None
+    assert _consumption_recommendation(0) is None
+
+
+def test_diet_saving_non_positive():
+    from unittest.mock import patch
+    with patch.dict(constants.DIET_ANNUAL_KG, {constants.DietType.MEDIUM_MEAT: 4000.0}):
+        data = FootprintProfile(diet=constants.DietType.HEAVY_MEAT)
+        resp = _insights_for(data)
+        assert not any(r.category == "diet" for r in resp.recommendations)
+
+
+def test_positive_home_and_consumption_emissions():
+    data = FootprintProfile(
+        home=HomeInput(electricity_kwh_per_month=100),
+        consumption=ConsumptionInput(goods_spend_usd_per_month=100),
+    )
+    resp = _insights_for(data)
+    categories = {r.category for r in resp.recommendations}
+    assert "home" in categories
+    assert "consumption" in categories

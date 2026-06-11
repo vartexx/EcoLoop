@@ -21,6 +21,8 @@ _MAX_WASTE_WEEK = 1_000.0
 
 
 class TransportInput(BaseModel):
+    """Input inputs related to vehicle and air transit."""
+
     car_km_per_week: float = Field(0, ge=0, le=_MAX_KM_WEEK)
     car_fuel: CarFuel = CarFuel.PETROL
     public_transit_km_per_week: float = Field(0, ge=0, le=_MAX_KM_WEEK)
@@ -29,12 +31,16 @@ class TransportInput(BaseModel):
 
 
 class HomeInput(BaseModel):
+    """Input inputs related to household utility consumption."""
+
     electricity_kwh_per_month: float = Field(0, ge=0, le=_MAX_KWH_MONTH)
     natural_gas_kwh_per_month: float = Field(0, ge=0, le=_MAX_KWH_MONTH)
     household_size: int = Field(1, ge=1, le=50)
 
 
 class ConsumptionInput(BaseModel):
+    """Input inputs related to general lifestyle spending and waste."""
+
     goods_spend_usd_per_month: float = Field(0, ge=0, le=_MAX_USD_MONTH)
     waste_kg_per_week: float = Field(0, ge=0, le=_MAX_WASTE_WEEK)
 
@@ -49,6 +55,8 @@ class FootprintProfile(BaseModel):
 
 
 class Comparison(BaseModel):
+    """Benchmark comparisons against global averages and sustainable targets."""
+
     global_average_annual_kg: float
     sustainable_target_annual_kg: float
     ratio_to_global_average: float
@@ -66,12 +74,16 @@ class AnalysisReport(BaseModel):
 
 # ── Insights ──────────────────────────────────────────────────────────
 class ActionTip(BaseModel):
+    """Individual carbon reduction recommendation tip."""
+
     category: str
     action: str
     estimated_annual_savings_kg: float
 
 
 class CoachFeedback(BaseModel):
+    """Full recommendation feedback from the AI coach or rule system."""
+
     summary: str
     recommendations: list[ActionTip]
     source: str  # "gemini" | "rules"
@@ -79,11 +91,15 @@ class CoachFeedback(BaseModel):
 
 # ── Snapshots (tracking history) ────────────────────────────────────────
 class TimelineSnapshotCreate(BaseModel):
+    """Request payload for uploading a snapshot to historical logs."""
+
     device_id: str = Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     input: FootprintProfile
     result: AnalysisReport
 
 
 class TimelineSnapshot(TimelineSnapshotCreate):
+    """Fully stored anonymous footprint snapshot logs."""
+
     id: str
     created_at: str  # ISO-8601 UTC

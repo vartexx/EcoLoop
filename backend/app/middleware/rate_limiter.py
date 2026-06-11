@@ -9,33 +9,41 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
 
-from fastapi import Request
+from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp
 
 
 class SimpleRateLimiterMiddleware(BaseHTTPMiddleware):
+    """Middleware that implements simple in-memory client IP rate limiting."""
+
     def __init__(
         self,
-        app,
+        app: ASGIApp,
         calc_limit: int = 10,
         write_limit: int = 5,
         window_seconds: int = 60,
     ) -> None:
+        """Initialize the rate limiter middleware with custom limits."""
         super().__init__(app)
         self.calc_limit = calc_limit
         self.write_limit = write_limit
         self.window_seconds = window_seconds
-        
+
         # In-memory storage for request timestamps.
         self._calc_history: dict[str, list[float]] = defaultdict(list)
         self._write_history: dict[str, list[float]] = defaultdict(list)
         self._lock = threading.Lock()
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Process an incoming request and check rate limit window bounds."""
         path = request.url.path
-        
+
         # Only apply rate limits to API endpoints
         if path.startswith("/api/"):
             client_ip = request.client.host if request.client else "unknown"
